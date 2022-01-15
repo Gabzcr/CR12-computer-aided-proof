@@ -113,10 +113,15 @@ let hom_transform phi n =
 	List.concat (List.map phi (Array.to_list ternaire))
 ;;
 
+let hom_image phi l word =
+	let word_to_convert = (Array.to_list (Array.sub word 0 l)) in
+	List.concat (List.map phi word_to_convert)
+;;
+
 
 
 (*****************************************************************************)
-(*                     Binary tree type and functions                        *)
+(*                              Binary tree                                  *)
 (*****************************************************************************)
 
 (* This type will be used to store efficiently all factors of a given size in a word.
@@ -252,7 +257,7 @@ let is_still_alpha_free word n alpha plus =
 			else
 				pos := !pos - 1				
 		done;
-		max_alpha := max_rat !max_alpha (n-(!pos), (!p));
+		max_alpha := max_rat !max_alpha (n-(!pos), (!p)); (*pos contains i defined in section "Freeness" of the code explanation in the article.*)
 		if plus && (gt !max_alpha alpha) then res := false (*we must not have repetition of size more than alpha, except alpha itself *)
 		else if (not plus) && ge !max_alpha alpha then res := false; (*we must not have repetition of size alpha (or more) *)
 		p := !p + 1
@@ -264,7 +269,7 @@ let is_alpha_free word alpha plus =
 	(** General test checking if "word" is alpha-free. *)
 	let res = ref true in
 	let i = ref 0 in
-	while !res && !i < Array.length word do
+	while !res && !i < (Array.length word) do
 		if not(is_still_alpha_free word (!i) alpha plus) then
 			res := false;
 		i := !i + 1
@@ -317,7 +322,7 @@ let stays_alpha_free l1 l2 l3 alpha plus =
 	is_alpha_free (Array.of_list (l3@l2@l3)) alpha plus
 ;;
 
-exception Is_false;; (* Used to interrupt below function when a required condition is already proved false. *)
+exception IsFalse;; (* Used to interrupt below function when a required condition is already proved false. *)
 
 let is_synchronized w1 w2 w3 l =
 	(** Checks that three words w1 w2 and w3 satisfy the synchronizing condition from Lemma 2.1.
@@ -333,18 +338,18 @@ let is_synchronized w1 w2 w3 l =
 	let w33 = Array.append w3 w3 in
 	try
 	for i = 1 to l-1 do (* strict factor, can be equal*)
-		if Array.sub w11 i l = w1 || Array.sub w11 i l = w2 || Array.sub w11 i l = w2 then raise(Is_false)
-		else if Array.sub w12 i l = w1 || Array.sub w12 i l = w2 || Array.sub w12 i l = w3 then raise(Is_false)
-		else if Array.sub w13 i l = w1 || Array.sub w13 i l = w2 || Array.sub w13 i l = w3 then raise(Is_false)
-		else if Array.sub w21 i l = w1 || Array.sub w21 i l = w2 || Array.sub w21 i l = w3 then raise(Is_false)
-		else if Array.sub w22 i l = w1 || Array.sub w22 i l = w2 || Array.sub w22 i l = w3 then raise(Is_false)
-		else if Array.sub w23 i l = w1 || Array.sub w23 i l = w2 || Array.sub w23 i l = w3 then raise(Is_false)
-		else if Array.sub w31 i l = w1 || Array.sub w31 i l = w2 || Array.sub w31 i l = w3 then raise(Is_false)
-		else if Array.sub w32 i l = w1 || Array.sub w32 i l = w2 || Array.sub w32 i l = w3 then raise(Is_false)
-		else if Array.sub w33 i l = w1 || Array.sub w33 i l = w2 || Array.sub w33 i l = w3 then raise(Is_false)
+		if Array.sub w11 i l = w1 || Array.sub w11 i l = w2 || Array.sub w11 i l = w2 then raise(IsFalse)
+		else if Array.sub w12 i l = w1 || Array.sub w12 i l = w2 || Array.sub w12 i l = w3 then raise(IsFalse)
+		else if Array.sub w13 i l = w1 || Array.sub w13 i l = w2 || Array.sub w13 i l = w3 then raise(IsFalse)
+		else if Array.sub w21 i l = w1 || Array.sub w21 i l = w2 || Array.sub w21 i l = w3 then raise(IsFalse)
+		else if Array.sub w22 i l = w1 || Array.sub w22 i l = w2 || Array.sub w22 i l = w3 then raise(IsFalse)
+		else if Array.sub w23 i l = w1 || Array.sub w23 i l = w2 || Array.sub w23 i l = w3 then raise(IsFalse)
+		else if Array.sub w31 i l = w1 || Array.sub w31 i l = w2 || Array.sub w31 i l = w3 then raise(IsFalse)
+		else if Array.sub w32 i l = w1 || Array.sub w32 i l = w2 || Array.sub w32 i l = w3 then raise(IsFalse)
+		else if Array.sub w33 i l = w1 || Array.sub w33 i l = w2 || Array.sub w33 i l = w3 then raise(IsFalse)
 	done;
 	true
-	with Is_false -> false
+	with IsFalse -> false
 ;;
 
 
@@ -539,6 +544,43 @@ let homomorphism_alpha d l alpha plus = (* Need l >= d *)
 ;;
 
 
+(*****************************************************************************)
+(*      Enumerating all alpha-free words and checking their images           *)
+(*****************************************************************************)
+
+(* This section will be useful to prove the hypothesis of Ochem Lemma 2.1 
+(to prove that the image by a morphism of an infinite word is free). *)
+
+let images_are_free phi bound alpha beta =
+	(** Backtracking generating all alpha+-free ternary words of size at most bound
+	 and checking that there images by morphism phi are all beta+-free *)
+	let word = Array.make bound (-1) in
+	let rec aux pos =
+		for bit=0 to 2 do (*ternary words this time*)
+			let pos = pos+1 in
+			word.(pos) <- bit;
+			if is_still_alpha_free word pos alpha true then
+			begin
+				(*we are currently considering a alpha+-free word, need to check its image*)
+				if not(is_alpha_free (Array.of_list (hom_image phi (pos+1) word)) beta true) then
+					raise IsFalse;
+				if pos < (bound-1) then
+					aux pos (*continue backtracking*)
+			end;
+			word.(pos) <- -1 (*going backward requires to clean end of word*)
+		done;
+	in try aux (-1);
+	true
+	with IsFalse -> false
+;;
+
+let compute_bound alpha beta q =
+	let a = float_of_rat alpha in
+	let b = float_of_rat beta in
+	let qq = float_of_int q in
+	let res = max ((2.*.b)/.(b -. a)) ((2.*.(qq-.1.)/.qq)*.((3.*.b-.4.)/.(b-.2.))) in
+	(int_of_float (res +. 1.) + 1) (*+1 to be sure with approximations*)
+;;
 
 (*****************************************************************************)
 (*                          Dichotomy on alpha                               *)
@@ -577,7 +619,7 @@ let dichotomy (mini : rat) (maxi : rat) d l =
 		alpha_inter := inter (!alpha_min) (!alpha_max);
 		let w = (d_directed_alpha_free d (!alpha_inter) l false) in
 		let w_plus = (d_directed_alpha_free d (!alpha_inter) l true) in
-		if w = [||] && w_plus != [||] then
+		if w = [||] && not(w_plus = [||]) then
 			found := true
 		else begin
 			if w_plus = [||] then alpha_min := (!alpha_inter) (*in this case alpha is too strong a constraint,
@@ -589,4 +631,4 @@ let dichotomy (mini : rat) (maxi : rat) d l =
 	!alpha_inter
 ;;
 
-	
+

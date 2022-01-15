@@ -1,0 +1,10 @@
+On veut améliorer la borne lim_n [f(n)/n], où f(n) représente le nombre de réduction carrée pour obtenir un mot sans carré.
+
+Pour l'instant, cette borne est de 2/5 (cf article qui fait du backtracking).
+
+
+Idée : on doit pouvoir montrer 1/3. En faisant en 2 étapes :
+1) On construit un ensemble de mots S_1/3 qui contient tous les "facteurs interdits" qu'on peut trouver. Par exemple, les mots qui contiennent un carré de taille au moins 3. (si c'est le cas, en une étape on enlève 3 lettres et on se ramène au même problème sur un mot plus petit). Ou encore, les mots qui en deux étapes permettent d'enlever 6 lettres. Exemple : 0110011110 --> 01100110 --> 0110.
+
+2) Ensuite, on montre qu'il n'existe pas de mot infini qui évite tous les facteurs de S_1/3. Ainsi, il existe un nombre fini de mots problématique (de taille bornée donc). Et on obtient une nouvelle borne f(n)/n <= 1/3n + K, où K est une constante (le nombre de réduc à faire au pire sur les mots problématiques).
+On peut prouver cette étape par backtracking.

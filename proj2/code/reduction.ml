@@ -114,25 +114,27 @@ let rec tree_add t w = match w with
 (*Note : we will stock the mirrors of factors in the tree since the words will always be given and constructed reversed.
 This does not change anything : it is enough to forbid a suffix of a longer factor.*)
 
-
-let rec tree_add_arr t word pos = (*TODO*)
+let rec tree_add_arr t word n is_mirror = (*TODO*)
 	(** Same as tree_add but the word is in a predefined array instead of a list.
 	Factor added is the mirror of "word" ending at index "pos". *)
-	(*Printf.printf "looking at pos %d of word\n" pos;*)
-	if pos = -1 then Leaf (*We are done reading the whole word to get here, or we are adding empty word to tree of suffixes *)
-	else match word.(pos) with
-	| 0 -> begin match t with
-		| Nil -> Node(tree_add_arr Nil word (pos-1), Nil)
-		| Leaf -> Leaf (*stop here, factor we are adding already has its prefix in the tree*)
-		| Node(t1,t2) -> Node(tree_add_arr t1 word (pos-1), t2)
-		end
-	| 1 -> begin match t with
-		| Nil ->  Node(Nil, tree_add_arr Nil word (pos-1))
-		| Leaf -> Leaf
-		| Node(t1,t2) -> Node(t1, tree_add_arr t2 word (pos-1))
-		end
-	| -1 -> raise Empty
-	| _ -> raise BadValue
+	let rec aux t word pos n is_mirror =
+		(*Printf.printf "looking at pos %d of word\n" pos;*)
+		if pos = -1 then Leaf (*We are done reading the whole word to get here, or we are adding empty word to tree of suffixes *)
+		else let current_index = if is_mirror then pos else (n-pos) in
+		match word.(current_index) with
+		| 0 -> begin match t with
+			| Nil -> Node(aux Nil word (pos-1) n is_mirror, Nil)
+			| Leaf -> Leaf (*stop here, factor we are adding already has its prefix in the tree*)
+			| Node(t1,t2) -> Node(aux t1 word (pos-1) n is_mirror, t2)
+			end
+		| 1 -> begin match t with
+			| Nil ->  Node(Nil, aux Nil word (pos-1) n is_mirror)
+			| Leaf -> Leaf
+			| Node(t1,t2) -> Node(t1, aux t2 word (pos-1) n is_mirror)
+			end
+		| -1 -> raise Empty
+		| _ -> raise BadValue
+	in aux t word n n is_mirror
 ;;
 
 (* Word is a list - version*)
@@ -180,6 +182,20 @@ let rec has_factor_in_tree word n t =
 		pos := (!pos) - 1;
 	done;
 	(!res)
+;;
+
+let rec nb_of_factors_in_tree t = match t with
+	| Nil -> 0
+	| Leaf -> 1
+	| Node(t1,t2) -> nb_of_factors_in_tree t1 + nb_of_factors_in_tree t2
+;;
+
+let rec tree_to_list_of_factors t =
+	let rec aux t word = match t with
+		| Nil -> []
+		| Leaf -> [List.rev word] (* for lexicographical order, since tree contains every mirror too *)
+		| Node(t1,t2) -> (aux t1 (0::word))@(aux t2 (1::word))
+	in aux t []
 ;;
 
 (*****************************************************************************)
@@ -376,8 +392,11 @@ let wrong_factors max_step max_size = (*Generalise 1/3 to any alpha rational -> 
 						begin
 							(*print_string "entered condition\n";*)
 							if is_forbidden_base word new_pos then
-								to_forbid := tree_add_arr (!to_forbid) word new_pos 
+							begin
+								to_forbid := tree_add_arr (!to_forbid) word new_pos true;
 								(*no need to continue backtracking here, it would have an already forbidden factor as prefix *)
+								to_forbid := tree_add_arr (!to_forbid) word new_pos false; (*if a factor is forbidden, then by same reductions so is its mirror.*)
+							end
 							else if new_pos < (max_size - 1) then (*otherwise length is size max_size, no need to check next letters, limit is reached*)
 								find_factors_2 new_pos; (* this word is okay, look for something forbidden later *)
 						end;
@@ -406,7 +425,11 @@ let wrong_factors max_step max_size = (*Generalise 1/3 to any alpha rational -> 
 						&& (still_has_no_big_square word new_pos 3) then (*don't build a big square, otherwise you're already forbidden by separate case*)
 						begin
 							if is_forbidden word new_pos forbid_2 forbid_1  then
-								to_forbid := tree_add_arr (!to_forbid) word new_pos 
+							begin
+								to_forbid := tree_add_arr (!to_forbid) word new_pos true;
+								(*no need to continue backtracking here, it would have an already forbidden factor as prefix *)
+								to_forbid := tree_add_arr (!to_forbid) word new_pos false; (*if a factor is forbidden, then by same reductions so is its mirror.*)
+							end
 							else if new_pos < (max_size - 1) then (*otherwise length is size max_size, no need to check next letters, limit is reached*)
 								find_factors new_pos; (* this word is okay, look for something forbidden later *)
 						end;

@@ -115,20 +115,30 @@ print_list (generate_word forbid 100);;
 let forbid = tree_add Nil [0;0;0];;
 print_tree forbid;;
 print_string "\n";;
-
+Printf.printf "We forbid %d factors with this method\n" (nb_of_factors_in_tree forbid);
 print_array (generate_no_big_square forbid 100);;
 
 
 (* Searching for forbidden factors *)
+(*
+for nb_steps = 2 to 10 do
+	let forbid = wrong_factors nb_steps 20 in
+	Printf.printf "%!";
+	print_tree_as_factors forbid;
+	print_string "\n";
+	Printf.printf "We forbid %d factors with this method\n" (nb_of_factors_in_tree forbid);
+	print_array (generate_no_big_square forbid 1000);
+done;;
+*)
 
-let forbid = wrong_factors 2 10 in
+let forbid = wrong_factors 6 20 in
+Printf.printf "%!";
 print_tree_as_factors forbid;
+print_list_of_list (tree_to_list_of_factors forbid);
 print_string "\n";
-print_array (generate_no_big_square forbid 100);;
-
-
-
-
+Printf.printf "We forbid %d factors with this method\n" (nb_of_factors_in_tree forbid);
+Printf.printf "Trying to generate a word of size 1000 avoiding all these factors :\n";
+print_array (generate_no_big_square forbid 1000);
 
 
 

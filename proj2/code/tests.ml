@@ -104,20 +104,6 @@ let print_tree_as_factors t =
 (*                                  TESTS                                    *)
 (*****************************************************************************)
 
-(* tree tests + generate with forbidden factors*)
-
-let forbid = tree_add (tree_add (tree_add Nil [0;0]) [1;1;1]) [0;1;0];;
-print_tree forbid;;
-print_string "\n";;
-
-print_list (generate_word forbid 100);;
-
-let forbid = tree_add Nil [0;0;0];;
-print_tree forbid;;
-print_string "\n";;
-Printf.printf "We forbid %d factors with this method\n" (nb_of_factors_in_tree forbid);
-print_array (generate_no_big_square forbid 100);;
-
 
 (* Searching for forbidden factors *)
 (*
@@ -127,18 +113,27 @@ for nb_steps = 2 to 10 do
 	print_tree_as_factors forbid;
 	print_string "\n";
 	Printf.printf "We forbid %d factors with this method\n" (nb_of_factors_in_tree forbid);
-	print_array (generate_no_big_square forbid 1000);
+	print_array (generate_no_big_square forbid 1000 (1,3));
 done;;
 *)
 
-let forbid = wrong_factors 6 20 in
-Printf.printf "%!";
-print_tree_as_factors forbid;
-print_list_of_list (tree_to_list_of_factors forbid);
-print_string "\n";
-Printf.printf "We forbid %d factors with this method\n" (nb_of_factors_in_tree forbid);
-Printf.printf "Trying to generate a word of size 1000 avoiding all these factors :\n";
-print_array (generate_no_big_square forbid 1000);
+
+
+let size = 18 in
+let nb_reduc = 5 in
+Printf.printf "Creating forbidden factors of size at most %d for at most %d reduction steps.\n" size nb_reduc;
+let forbid = wrong_factors 5 18 in
+(*print_tree_as_factors forbid;
+print_list_of_list (tree_to_list_of_factors forbid);*)
+Printf.printf "We forbid %d factors with this method.\n" (nb_of_factors_in_tree forbid);
+Printf.printf "Trying to generate a word of size 1000 avoiding all these factors :%!\n";
+print_array (generate forbid 1000 (1,3));
+Printf.printf "Empty array means there are no word of required size dodging all forbidden factors with no big square.\n"
+
+
+
+
+
 
 
 

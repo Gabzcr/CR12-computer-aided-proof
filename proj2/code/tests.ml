@@ -118,19 +118,29 @@ done;;
 *)
 
 
-
-let size = 18 in
-let nb_reduc = 5 in
+(*
+let size = 24 in
+let nb_reduc = 2 in
 Printf.printf "Creating forbidden factors of size at most %d for at most %d reduction steps.\n" size nb_reduc;
-let forbid = wrong_factors 5 18 in
+let forbid = wrong_factors nb_reduc size in
+(*print_tree_as_factors forbid;
+print_list_of_list (tree_to_list_of_factors forbid);*)
+Printf.printf "We forbid %d factors with this method.\n" (nb_of_factors_in_tree forbid);
+Printf.printf "Trying to generate a word of size 10000 avoiding all these factors :%!\n";
+print_array (generate forbid 10000 (1,3));
+Printf.printf "Empty array means there are no word of required size dodging all forbidden factors with no big square.\n"
+*)
+
+let size = int_of_string (Sys.argv.(1)) in
+let nb_reduc = int_of_string (Sys.argv.(2)) in
+Printf.printf "Creating forbidden factors of size at most %d for at most %d reduction steps.\n" size nb_reduc;
+let forbid = wrong_factors nb_reduc size in
 (*print_tree_as_factors forbid;
 print_list_of_list (tree_to_list_of_factors forbid);*)
 Printf.printf "We forbid %d factors with this method.\n" (nb_of_factors_in_tree forbid);
 Printf.printf "Trying to generate a word of size 1000 avoiding all these factors :%!\n";
 print_array (generate forbid 1000 (1,3));
 Printf.printf "Empty array means there are no word of required size dodging all forbidden factors with no big square.\n"
-
-
 
 
 

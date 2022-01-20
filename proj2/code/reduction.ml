@@ -185,6 +185,10 @@ let has_no_big_square word n min_period =
 ;;
 
 
+(*****************************************************************************)
+(*                    Part I : Verification of a set                         *)
+(*****************************************************************************)
+
 (*word is a array*)
 let generate forbidden_factors size alpha = 
 	(** Backtracking that generates a word of size "size" that doesn't contain any factor from tree "forbidden_factors",
@@ -214,19 +218,19 @@ and k.q/p letters in k steps*)
 (*                   Searching for forbidden factors                         *)
 (*****************************************************************************)
 
-let rec is_forbidden_base word n =
+let rec is_forbidden_base word n reduc =
 	let res = ref false in
 	let pos = ref 0 in
 	while not(!res) && (!pos) < n do (*look for small squares*)
 		if word.(!pos) = word.(!pos+1) then begin
 			let reduc_word = Array.append (Array.sub word 0 (!pos)) (Array.sub word (!pos+1) (n-(!pos+1)+1)) in
-			if not(has_no_big_square reduc_word ((Array.length reduc_word) - 1) 5) then (*-1 since we want position of last letter*)
-				res := true; (*In that case we removed one letter at first step and 5 letters at step 2*)
+			if not(has_no_big_square reduc_word ((Array.length reduc_word) - 1) (reduc-1)) then (*-1 since we want position of last letter*)
+				res := true; (*In that case we removed one letter at first step and 5 letters at step 2 for example*)
 		end;
 		(* squares of size 2 *)
 		if (!pos) <= (n-3) && word.(!pos) = word.(!pos + 2) && word.(!pos+1) = word.(!pos+3) then begin
 			let reduc_word = Array.append (Array.sub word 0 (!pos)) (Array.sub word (!pos+2) (n-(!pos+2)+1)) in
-			if not(has_no_big_square reduc_word ((Array.length reduc_word) - 1) 4) then
+			if not(has_no_big_square reduc_word ((Array.length reduc_word) - 1) (reduc-2)) then
 				res := true; (*In that case we removed 2 letters at first step and 4 letters at step 2*)
 		end;
 		pos := (!pos) + 1
@@ -274,12 +278,12 @@ let print_empty a =
 
 let wrong_factors max_step max_size = (*Generalise 1/3 to any alpha rational -> replace "3" with alpha^-1*)
 	let forbidden = Array.make_matrix (3*max_step+1) (max_step+1) Nil in
-	(*forbidden(r,s) contains all factors in which we can retrieve r letters within s reduction steps --> prog dyn.
+	(*forbidden(r,s) contains all factors in which we can retrieve r-3l letters within s-l reduction steps,
+	for 0 <= l <= max(s-1, r/3) --> prog dyn.
 	Those will be our forbidden factors : factors that we can reduce efficiently.
 	Note : forbidden excludes big squares, this is a separate step of computation*)
 	let rec build_forbidden reduc steps =
 		if forbidden.(reduc).(steps) != Nil then forbidden.(reduc).(steps) (*this has already been computed*)
-		(*TODO : possible optimisation : no need to remember lines (steps-2) and earlier when we have line (steps-1)*)
 		else begin
 			(* Base case : check that retrieving any square of size 1 or 2 does not make appear
 			a big square in the word (of size 4 or 5) *)
@@ -292,9 +296,9 @@ let wrong_factors max_step max_size = (*Generalise 1/3 to any alpha rational -> 
 						let new_pos = pos+1 in
 						word.(new_pos) <- bit;
 						if not(is_suffix_in_mirrors_tree word new_pos (!to_forbid)) (*don't even bother to look at word if it already has a factor in to_forbid*)
-						&& (still_has_no_big_square word new_pos 3) then (*don't build a big square, otherwise you're already forbidden by separate case*)
+						&& (still_has_no_big_square word new_pos reduc) then (*don't build a big square, otherwise you can remove "reduce" letters in one step only*)
 						begin
-							if is_forbidden_base word new_pos then
+							if is_forbidden_base word new_pos reduc then
 							begin
 								to_forbid := tree_add (!to_forbid) word new_pos true;
 								(*no need to continue backtracking here, it would have an already forbidden factor as prefix *)
@@ -347,5 +351,9 @@ let wrong_factors max_step max_size = (*Generalise 1/3 to any alpha rational -> 
 		end
 	in build_forbidden (3*max_step) max_step
 ;;
+
+
+
+
 
 

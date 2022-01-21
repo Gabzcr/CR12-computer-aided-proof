@@ -136,15 +136,40 @@ let nb_reduc = int_of_string (Sys.argv.(2)) in
 let alpha = (int_of_string (Sys.argv.(3)), int_of_string (Sys.argv.(4)))in
 Printf.printf "Creating forbidden factors of size at most %d for at most %d reduction steps.\n" size nb_reduc;
 let forbid = wrong_factors nb_reduc size alpha in
+let forbid2 = tree_add forbid [|0;0;1;0;0|] 4 true in
+let forbid3 = tree_add forbid2 [| 1;1;0;1;1|] 4 true in 
+let liste_finale = (tree_to_list_of_factors forbid) in
 print_tree_as_factors forbid;
-print_list_of_list (tree_to_list_of_factors forbid);
+print_list_of_list liste_finale;
 Printf.printf "We forbid %d factors with this method.\n" (nb_of_factors_in_tree forbid);
 Printf.printf "Trying to generate a word of size 1000 avoiding all these factors :%!\n";
-print_array (generate forbid 1000 alpha);
-Printf.printf "Empty array means there are no word of required size dodging all forbidden factors with no big square.\n"
+print_array (generate forbid3 1000 alpha);
+Printf.printf "Empty array means there are no word of required size dodging all forbidden factors with no big square.\n";
 
-
-
+(*
+let res = ref true in
+let word = ref [] in
+let rec check_list l = match l with
+	| [] -> Printf.printf "end of check\n"
+	| h::t -> try
+				let (i,j) = reduce_ratio (Array.of_list h) (List.length h - 1) (3,1) 0 0 in
+				Printf.printf "Not found : (%d,%d)\n" i j;
+				res := false;
+				word := h;
+			with Found(i,j) -> (Printf.printf "Found : (%d,%d)\n" i j; check_list t)
+in
+(*
+try
+	let (i,j) = (reduce_ratio [| 0;0;1;0;1 |] 4 (3,1) 0 0) in
+	Printf.printf "Not found : (%d,%d)\n" i j;
+with Found(i,j) -> Printf.printf "Found : (%d,%d)" i j;*)
+check_list liste_finale;
+print_string "Fini\n";
+if not(!res) then
+begin
+	Printf.printf "FAUX :\n";
+	print_list (!word)
+end;;*)
 
 (*
 Creating forbidden factors of size at most 24 for at most 7 reduction steps.

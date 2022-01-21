@@ -144,7 +144,7 @@ print_list_of_list liste_finale;
 Printf.printf "We forbid %d factors with this method.\n" (nb_of_factors_in_tree forbid);
 Printf.printf "Trying to generate a word of size 1000 avoiding all these factors :%!\n";
 print_array (generate forbid3 1000 alpha);
-Printf.printf "Empty array means there are no word of required size dodging all forbidden factors with no big square.\n";
+Printf.printf "Empty array means there are no word of required size dodging all forbidden factors with no big square.%!\n";
 
 (*
 let res = ref true in

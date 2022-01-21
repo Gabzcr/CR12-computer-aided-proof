@@ -272,7 +272,7 @@ let rec is_forbidden word n forbid_previous max_period reduc =
 			if (!is_square) then begin
 				let reduc_word = Array.append (Array.sub word 0 (!pos)) (Array.sub word (!pos+(!period)) (n-(!pos+(!period))+1)) in
 					if (has_factor_in_tree reduc_word ((Array.length reduc_word) - 1) forbid_previous.(!period))(*period is the number of letter we removed*)
-					then (*case forbidden in one step done separately*)
+					|| not(has_no_big_square reduc_word ((Array.length reduc_word)-1) (reduc - (!period))) then (*case forbidden in one step done separately*)
 						res := true
 			end;
 			period := !period + 1;
@@ -282,7 +282,13 @@ let rec is_forbidden word n forbid_previous max_period reduc =
 	!res
 ;;
 
-
+let complement word =
+	let res = Array.make (Array.length word) 0 in
+	for i = 0 to (Array.length word - 1) do
+		res.(i) <- 1-word.(i)
+	done;
+	res
+;;
 
 (* Debugging function : prints the cases of the table that were computed.
 let print_empty a = 
@@ -311,7 +317,7 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 		else begin
 			(* Base case : check that retrieving any square of size 1 or 2 does not make appear
 			a big square in the word (of size 4 or 5) *)
-			if steps = 1 then
+			if steps = 2 then
 			begin
 				let word = Array.make max_size (-1) in
 				let to_forbid = ref Nil in
@@ -319,13 +325,21 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 					for bit=0 to 1 do
 						let new_pos = pos+1 in
 						word.(new_pos) <- bit;
-						if not(still_has_no_big_square word new_pos reduc) then
+						if not(is_suffix_in_mirrors_tree word new_pos (!to_forbid)) (*don't even bother to look at word if it already has a factor in to_forbid*)
+						&& (still_has_no_big_square word new_pos ceil_min_period) then (*don't build a big square, 
+						otherwise you can remove "reduc" letters in one step only*)
 						begin
-							to_forbid := tree_add (!to_forbid) word new_pos true;
-							to_forbid := tree_add (!to_forbid) word new_pos false; (*if a factor is forbidden, then by same reductions so is its mirror.*)
-						end
-						else if new_pos < (max_size - 1) then (*otherwise length is size max_size, no need to check next letters, limit is reached*)
-							find_factors_2 new_pos; (* this word is okay, look for something forbidden later *)
+							if is_forbidden_base word new_pos (ceil_min_period -1) reduc then
+							begin
+								(*no need to continue backtracking here, it would have an already forbidden factor as prefix *)
+								to_forbid := tree_add (!to_forbid) word new_pos true;
+								to_forbid := tree_add (!to_forbid) word new_pos false; (*if a factor is forbidden, then by same reductions so is its mirror.*)
+								to_forbid := tree_add (!to_forbid) (complement word) new_pos true; (*complement of word is also forbidden*)
+								to_forbid := tree_add (!to_forbid) (complement word) new_pos false; (*and its own reverse...*)
+							end
+							else if new_pos < (max_size - 1) then (*otherwise length is size max_size, no need to check next letters, limit is reached*)
+								find_factors_2 new_pos; (* this word is okay, look for something forbidden later *)
+						end;
 						word.(new_pos) <- -1 (*going backward requires to clean end of word*)
 					done;
 				in
@@ -351,7 +365,7 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 						let new_pos = pos+1 in
 						word.(new_pos) <- bit;
 						if not(is_suffix_in_mirrors_tree word new_pos (!to_forbid)) (*don't even bother to look at word if it already has a factor in to_forbid*)
-						then (*don't build a big square, 
+						&& (still_has_no_big_square word new_pos ceil_min_period) then (*don't build a big square, 
 						otherwise you're already forbidden by separate case : one step of reduction not in the tree*)
 						begin
 							if is_forbidden word new_pos forbid_previous (ceil_min_period-1) reduc then
@@ -359,6 +373,8 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 								to_forbid := tree_add (!to_forbid) word new_pos true;
 								(*no need to continue backtracking here, it would have an already forbidden factor as prefix *)
 								to_forbid := tree_add (!to_forbid) word new_pos false; (*if a factor is forbidden, then by same reductions so is its mirror.*)
+								to_forbid := tree_add (!to_forbid) (complement word) new_pos true; (*complement of word is also forbidden*)
+								to_forbid := tree_add (!to_forbid) (complement word) new_pos false; (*and its own reverse...*)
 							end
 							else if new_pos < (max_size - 1) then (*otherwise length is size max_size, no need to check next letters, limit is reached*)
 								find_factors new_pos; (* this word is okay, look for something forbidden later *)
@@ -373,6 +389,7 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 		end
 	in build_forbidden (rat_ceil (mult_by_int alpha max_step)) max_step
 ;;
+
 
 
 let print_array a =

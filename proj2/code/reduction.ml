@@ -71,6 +71,7 @@ let mult_by_int (r : rat) n = match r with
 ;;
 
 
+
 (*****************************************************************************)
 (*                             Binary trees                                  *)
 (*****************************************************************************)
@@ -158,6 +159,62 @@ let rec tree_to_list_of_factors t =
 		| Leaf -> [List.rev word] (* for lexicographical order, since tree contains every mirror too *)
 		| Node(t1,t2) -> (aux t1 (0::word))@(aux t2 (1::word))
 	in aux t []
+;;
+
+
+(*****************************************************************************)
+(*                           File manipulation                               *)
+(*****************************************************************************)
+
+
+let write_factors l file = (*l is a list of factor*)
+	let oc = open_out file in (* create or truncate file, return channel *)
+	let rec aux_write ll = match ll with
+		| [] -> ()
+		| h::t -> let str = String.concat "" (List.map string_of_int h) in 
+			Printf.fprintf oc "%s\n" str; aux_write t
+	in aux_write l;
+	close_out oc
+;;
+
+let write_tree_to_file tree file =
+	let l = tree_to_list_of_factors tree in
+	write_factors l file
+;;
+
+let get_tree_from_file file =
+	let res = ref Nil in
+	let in_channel = open_in file in
+	try
+	  while true do
+		let line = input_line in_channel in
+		(* do something with line *)
+		let factor = Array.init (String.length line) (fun i -> (int_of_char line.[i]) - 48) in (*ASCII code for '0' is 48*)
+		res := tree_add (!res) factor (Array.length factor - 1) false
+	  done;
+	  (!res)
+	with End_of_file ->
+	  close_in in_channel; (!res)
+;;
+
+let exists_file file =
+	try
+		let _ = open_in file in
+		true
+	with Sys_error s -> false
+;;(* TODO Sys.file_exists already does this !*)
+
+(*hardcoded function for file names already given in the form tree_files/f_reduc_steps_maxSize.txt*)
+let exists_before reduc steps min max dir_name =
+	let res = ref 0 in
+	let index = ref min in
+	let file_name_prefix = (dir_name^"/f_"^(string_of_int reduc)^"_"^(string_of_int steps)^"_") in
+	while (!res) = 0 && (!index) <= max do
+		if exists_file (file_name_prefix^(string_of_int (!index))^".txt") then
+			res := (!index);
+		incr index;
+	done;
+	(!res)
 ;;
 
 
@@ -389,18 +446,30 @@ let print_empty a =
 ;;
 
 
-let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha rational -> replace "3" with alpha^-1*)
+let wrong_factors max_step max_sizes alpha_inv = (*Generalise 1/3 to any alpha rational -> replace "3" with alpha^-1*)
 	let alpha = rat_inv (alpha_inv) in
 	(*let ceil_min_period = rat_ceil alpha in*)
 	let floor_min_period = rat_floor alpha in
 	let tot_letters = (rat_ceil (mult_by_int alpha max_step)) in (*number of letters to remove in total*)
 	let forbidden = Array.make_matrix (tot_letters+1) (max_step+1) Nil in
+	let dir_name = match alpha_inv with
+		| (p,q) -> "tree_files_"^ (string_of_int p)^"_"^(string_of_int q)
+	in
 	(*forbidden(r,s) contains all factors in which we can retrieve r-3l letters within s-l reduction steps,
 	for 0 <= l <= max(s-1, r/3) --> prog dyn.
 	Those will be our forbidden factors : factors that we can reduce efficiently.
 	Note : forbidden excludes big squares, this is a separate step of computation*)
-	let rec build_forbidden reduc steps =
+	let rec build_forbidden reduc steps max_size =
 		if forbidden.(reduc).(steps) != Nil then forbidden.(reduc).(steps) (*this has already been computed*)
+		else let file_name_prefix = (dir_name^"/f_"^(string_of_int reduc)^"_"^(string_of_int steps)^"_") in
+		let size_exist = (exists_before reduc steps max_size 50 dir_name) in
+		if size_exist != 0 then begin
+		(*TODO Warning ! ici je hardcode que je cherche si un fichier existe pour des tailles de facteur d'au plus 50, ça ne devrait pas dépasser.*)
+			let forbid = get_tree_from_file (file_name_prefix^(string_of_int size_exist)^".txt") in
+			Printf.printf "--> Factors of size at most %d from which we remove %d letters in %d steps were already computed (maybe in better max size)%!\n" max_size reduc steps;
+			forbidden.(reduc).(steps) <- forbid;
+			forbidden.(reduc).(steps)
+		end
 		else begin
 			(* Base case : check that retrieving any square of size 1 or 2 does not make appear
 			a big square in the word (of size 4 or 5) *)
@@ -411,6 +480,17 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 				if (reduc+1 < Array.length forbidden) && forbidden.(reduc+1).(steps) != Nil then
 					to_forbid := forbidden.(reduc+1).(steps); (*if we can remove reduc+1 letters then we remove reduc letters in steps,
 					so start from here, compute less*)
+				
+				(*to speed up search of factors when we have the factors of smaller size already, start from its tree and don't look at word before its size*)
+				(*let threshold = ref 0 in 
+				let size_exist = (exists_before reduc steps 1 max_size dir_name) in
+				if size_exist != 0 then begin
+					let forbid_less = get_tree_from_file (file_name_prefix^(string_of_int size_exist)^".txt") in
+					to_forbid := union (!to_forbid) forbid_less;
+					threshold := size_exist;
+					Printf.printf "We start from previously found prefixes of size %d\n" size_exist;
+				end;*)
+				
 				let rec find_factors_2 pos =
 					for bit=0 to 1 do
 						let new_pos = pos+1 in
@@ -434,14 +514,22 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 				in
 				find_factors_2 (-1);
 				forbidden.(reduc).(steps) <- (!to_forbid);
-				Printf.printf "--> Done computing factors from which we remove %d letters in %d steps%!\n" reduc steps;
+				Printf.printf "--> Done computing factors of size at most %d from which we remove %d letters in %d steps%!\n" max_size reduc steps;
+				
+				let size_exist = (exists_before reduc steps 1 max_size dir_name) in (* this checks if a file existed with smaller factor size *)
+				if size_exist != 0 then (* TODO Warning : same as above*)
+				(*Delete previous file if factors were computed with a bigger size, only keep the better (bigger) tree *)
+					Sys.remove (file_name_prefix^(string_of_int size_exist)^".txt");
+				write_tree_to_file forbidden.(reduc).(steps) (file_name_prefix^(string_of_int max_size)^".txt");
+				Printf.printf "Corresponding tree added to file %s!\n" (file_name_prefix^(string_of_int max_size)^".txt");
+				
 				forbidden.(reduc).(steps)
 			end
 			
 			(* Recursive call *)
 			else (* expected that steps is at least 3 here, not steps = 1 *)
 			begin
-				let to_forbid = ref (build_forbidden (reduc - floor_min_period) (steps-1)) in
+				let to_forbid = ref (build_forbidden (reduc - floor_min_period) (steps-1) max_size) in
 				if (reduc+1 < Array.length forbidden) && forbidden.(reduc+1).(steps) != Nil then
 					to_forbid := union (!to_forbid) forbidden.(reduc+1).(steps);
 				(*Careful : floor here because we're not sure it is enough to remove "only" reduc-ceil letters, 
@@ -457,7 +545,7 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 						&& (still_has_no_big_square word new_pos reduc) then (*don't build a big square, 
 						otherwise you're already forbidden by separate case : one step of reduction not in the tree*)
 						begin
-							if is_forbidden word new_pos reduc steps then
+							if is_forbidden word new_pos reduc steps max_size then
 							begin
 								to_forbid := tree_add (!to_forbid) word new_pos true;
 								to_forbid := tree_add (!to_forbid) word new_pos false; (*if a factor is forbidden, then by same reductions so is its mirror.*)
@@ -472,12 +560,21 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 				in 
 				find_factors (-1);
 				forbidden.(reduc).(steps) <- (!to_forbid);
-				Printf.printf "--> Done computing factors from which we remove %d letters in %d steps%!\n" reduc steps;
+				Printf.printf "--> Done computing factors of size at most %d from which we remove %d letters in %d steps%!\n" max_size reduc steps;
+				
+				let size_exist = (exists_before reduc steps 1 50 dir_name) in (* this checks if a file existed with smaller factor size *)
+				if size_exist != 0 then (* TODO Warning : same as above*)
+				(*Delete previous file if factors were computed with a bigger size, only keep the better (bigger) tree *)
+					Sys.remove (file_name_prefix^(string_of_int size_exist)^".txt");
+				write_tree_to_file forbidden.(reduc).(steps) (file_name_prefix^(string_of_int max_size)^".txt");
+				Printf.printf "Corresponding tree added to file %s!\n" (file_name_prefix^(string_of_int max_size)^".txt");
+				
+				
 				forbidden.(reduc).(steps) (*returns asked result : a tree of forbidden factors, ie reducing r letters within s steps*)
 			end
 		end
 	
-	and is_forbidden word n reduc steps =
+	and is_forbidden word n reduc steps max_size =
 		(** Checks that no reduction in "word" of a square of size 1 or 2 leads to a forbidden word,
 		ie a word containing a factor from corresponding tree of suffix forbid_1 or 2 (corresponding to description below) *)
 		let res = ref false in
@@ -496,7 +593,7 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 				done;
 				if (!is_square) then begin
 					let reduc_word = Array.append (Array.sub word 0 (!pos)) (Array.sub word (!pos+(!period)) (n-(!pos+(!period))+1)) in
-					let forbid_previous = build_forbidden (reduc - (!period)) (steps-1) in
+					let forbid_previous = build_forbidden (reduc - (!period)) (steps-1) max_size in
 					if (has_factor_in_tree reduc_word ((Array.length reduc_word) - 1) forbid_previous)(*period is the number of letter we removed*)
 					|| not(has_no_big_square reduc_word ((Array.length reduc_word)-1) (reduc - (!period))) then (*case forbidden in one step done separately*)
 						res := true;
@@ -510,11 +607,11 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 	in 
 	let res = ref Nil in
 	for nb_steps = 2 to max_step do
-		let tight_tree = build_forbidden (rat_ceil (mult_by_int alpha nb_steps)) nb_steps in
+		let tight_tree = build_forbidden (rat_ceil (mult_by_int alpha nb_steps)) nb_steps (max_sizes.(nb_steps)) in
 		res := union (!res) tight_tree;
-		Printf.printf "Added factors forbidden in %d steps\n%!" nb_steps;
+		Printf.printf "Added factors forbidden in %d steps of size at most %d\n%!" nb_steps max_sizes.(nb_steps);
 	done;
-	print_empty (forbidden);
+	(*print_empty (forbidden);*)
 	(!res)
 ;;
 

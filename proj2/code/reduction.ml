@@ -111,6 +111,14 @@ let rec tree_add t word n is_mirror =
 	in aux t word n n is_mirror
 ;;
 
+let rec union t1 t2 = match t1,t2 with
+	| Nil, t2 -> t2
+	| t1, Nil -> t1
+	| Leaf, t2 -> Leaf (*cut other tree, its word have this one as prefix*)
+	| t1, Leaf -> Leaf
+	| Node(t11, t12), Node(t21,t22) -> Node(union t11 t21, union t12 t22)
+;;
+
 let rec is_suffix_in_mirrors_tree word pos t = 
 	(** Checks that the mirror of a suffix (ending at index "pos") is in the tree.
 	Tree must contain mirrors of forbidden suffixes. *)
@@ -226,9 +234,123 @@ and k.q/p letters in k steps*)
 (*                   Searching for forbidden factors                         *)
 (*****************************************************************************)
 
-let rec is_forbidden_base word n max_period reduc =
+(*****************************************************************************)
+(*                   Definition of Printer functions                         *)
+(*****************************************************************************)
+
+let print_rat (r:rat) = match r with
+	| (p,q) -> Printf.printf "%d/%d\n" p q
+;;
+
+
+let rec print_tree t = match t with
+	| Nil -> Printf.printf ""
+	| Leaf -> Printf.printf "."
+	| Node(t1,t2) -> Printf.printf "Node("; print_tree t1; Printf.printf ","; print_tree t2; Printf.printf ")"
+;;
+
+let rec print_elements = function
+	| [] -> ()
+	| [a] -> print_int a
+	| h::t -> print_int h; print_string ";"; print_elements t
+;;
+
+let print_list l =		
+	print_string "[";
+	print_elements l;
+	print_string "]\n"
+;;
+
+let print_list_as_word l =
+	let rec print_elements2 = function
+		| [] -> ()
+		| h::t -> print_int h; print_elements2 t
+	in
+	print_elements2 l;
+;;
+
+let print_list_of_list l =
+	print_string "[";
+	let rec print_aux l = match l with
+		| [] -> ()
+		| [w] -> print_string "["; print_elements w; print_string "]"
+		| w1::ww -> print_string "["; print_elements w1; print_string "];\n"; print_aux ww
+	in print_aux l;
+	print_string "]\n"
+;;
+
+let print_array a =
+	print_string "[|";
+	for i = 0 to Array.length a - 2 do
+		print_int a.(i); print_string ";"
+	done;
+	if Array.length a > 0 then print_int a.(Array.length a -1);
+	print_string "|]\n"
+;;
+
+let print_array_of_array a =
+	print_string "[|\n";
+	for i = 0 to Array.length a - 2 do
+		print_array a.(i); print_string ";"
+	done;
+	if Array.length a > 0 then print_array a.(Array.length a -1);
+	print_string "|]\n"
+;;
+
+let print_array_pos arr start stop =
+	(** Prints the factor between start and stop from word "arr". *)
+	print_string "[|";
+	for i = start to stop do
+		print_int arr.(i); print_string ";"
+	done;
+	print_string "|]"
+;;
+
+let print_array_of_tree a =
+	print_string "[|";
+	for i = 0 to Array.length a - 2 do
+		print_tree a.(i); print_string ";"
+	done;
+	if Array.length a > 0 then print_tree a.(Array.length a -1);
+	print_string "|]\n"
+;;
+
+let print_array_of_array_of_tree a =
+	print_string "[|\n";
+	for i = 0 to Array.length a - 2 do
+		print_array_of_tree a.(i); print_string ";"
+	done;
+	if Array.length a > 0 then print_array_of_tree a.(Array.length a -1);
+	print_string "|]\n"
+;;
+
+let print_tree_as_factors t = 
+	print_string "[|";
+	let rec aux t str = match t with
+		| Nil -> ()
+		| Leaf -> print_list_as_word str (*doubly reversed*)
+		| Node(t1,t2) -> aux t1 (0::str); print_string ";"; aux t2 (1::str)
+	in aux t []
+;;
+
+
+
+
+
+
+let complement word =
+	let res = Array.make (Array.length word) 0 in
+	for i = 0 to (Array.length word - 1) do
+		res.(i) <- 1-word.(i)
+	done;
+	res
+;;
+
+
+let is_forbidden_base word n reduc =
 	let res = ref false in
 	let pos = ref 0 in
+	let max_period = reduc - 1 in
 	while not(!res) && (!pos) < n do (*look for small squares*)
 		let period = ref 1 in
 		while not(!res) && (!period) <= max_period do
@@ -241,9 +363,10 @@ let rec is_forbidden_base word n max_period reduc =
 				pos_square := !pos_square + 1;
 			done;
 			if (!is_square) then begin (*there is a square indeed*)
+				(*Printf.printf "Reducing square of size %d at pos %d\nThis gives new word :\n" (!period) (!pos);*)
 				let reduc_word = Array.append (Array.sub word 0 (!pos)) (Array.sub word (!pos+(!period)) (n-(!pos+(!period))+1)) in
-					if not(has_no_big_square reduc_word ((Array.length reduc_word) - 1) (reduc-(!period))) then (*-1 since we want position of last letter*)
-						res := true; (*In that case we removed one letter at first step and 5 letters at step 2 for example*)
+				if not(has_no_big_square reduc_word ((Array.length reduc_word) - 1) (reduc-(!period))) then (*-1 since we want position of last letter*)
+					res := true; (*In that case we removed one letter at first step and 5 letters at step 2 for example*)
 			end;
 			period := !period + 1;
 		done;
@@ -253,44 +376,8 @@ let rec is_forbidden_base word n max_period reduc =
 ;;
 
 
-let rec is_forbidden word n forbid_previous max_period reduc =
-	(** Checks that no reduction in "word" of a square of size 1 or 2 leads to a forbidden word,
-	ie a word containing a factor from corresponding tree of suffix forbid_1 or 2 (corresponding to description below) *)
-	let res = ref false in
-	let pos = ref 0 in
-	while not(!res) && (!pos) < n do (*look for small squares beginning at pos, no use to check last letter*)
-		let period = ref 1 in
-		while not(!res) && (!period) <= max_period do
-			let is_square = ref true in
-			if (!pos + 2*(!period)-1) > n then is_square := false;
-			let pos_square = ref 0 in
-			while !is_square && pos_square < period do (* check we have a square of size period at pos "pos" *)
-				if word.(!pos + (!pos_square)) != word.(!pos + (!period) + (!pos_square)) then
-					is_square := false;
-				pos_square := !pos_square + 1;
-			done;
-			if (!is_square) then begin
-				let reduc_word = Array.append (Array.sub word 0 (!pos)) (Array.sub word (!pos+(!period)) (n-(!pos+(!period))+1)) in
-					if (has_factor_in_tree reduc_word ((Array.length reduc_word) - 1) forbid_previous.(!period))(*period is the number of letter we removed*)
-					|| not(has_no_big_square reduc_word ((Array.length reduc_word)-1) (reduc - (!period))) then (*case forbidden in one step done separately*)
-						res := true
-			end;
-			period := !period + 1;
-		done;
-		pos := (!pos + 1)
-	done;
-	!res
-;;
 
-let complement word =
-	let res = Array.make (Array.length word) 0 in
-	for i = 0 to (Array.length word - 1) do
-		res.(i) <- 1-word.(i)
-	done;
-	res
-;;
-
-(* Debugging function : prints the cases of the table that were computed.
+(*Debugging function : prints the cases of the table that were computed.*)
 let print_empty a = 
 	for i = 0 to Array.length(a)-1 do
 		for j = 0 to Array.length(a.(0))-1 do
@@ -300,11 +387,11 @@ let print_empty a =
 		print_string "\n";
 	done
 ;;
-*)
+
 
 let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha rational -> replace "3" with alpha^-1*)
 	let alpha = rat_inv (alpha_inv) in
-	let ceil_min_period = rat_ceil alpha in
+	(*let ceil_min_period = rat_ceil alpha in*)
 	let floor_min_period = rat_floor alpha in
 	let tot_letters = (rat_ceil (mult_by_int alpha max_step)) in (*number of letters to remove in total*)
 	let forbidden = Array.make_matrix (tot_letters+1) (max_step+1) Nil in
@@ -321,17 +408,19 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 			begin
 				let word = Array.make max_size (-1) in
 				let to_forbid = ref Nil in
+				if (reduc+1 < Array.length forbidden) && forbidden.(reduc+1).(steps) != Nil then
+					to_forbid := forbidden.(reduc+1).(steps); (*if we can remove reduc+1 letters then we remove reduc letters in steps,
+					so start from here, compute less*)
 				let rec find_factors_2 pos =
 					for bit=0 to 1 do
 						let new_pos = pos+1 in
 						word.(new_pos) <- bit;
 						if not(is_suffix_in_mirrors_tree word new_pos (!to_forbid)) (*don't even bother to look at word if it already has a factor in to_forbid*)
-						&& (still_has_no_big_square word new_pos ceil_min_period) then (*don't build a big square, 
+						&& (still_has_no_big_square word new_pos reduc) then (*don't build a big square, 
 						otherwise you can remove "reduc" letters in one step only*)
 						begin
-							if is_forbidden_base word new_pos (ceil_min_period -1) reduc then
+							if is_forbidden_base word new_pos reduc then
 							begin
-								(*no need to continue backtracking here, it would have an already forbidden factor as prefix *)
 								to_forbid := tree_add (!to_forbid) word new_pos true;
 								to_forbid := tree_add (!to_forbid) word new_pos false; (*if a factor is forbidden, then by same reductions so is its mirror.*)
 								to_forbid := tree_add (!to_forbid) (complement word) new_pos true; (*complement of word is also forbidden*)
@@ -345,18 +434,18 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 				in
 				find_factors_2 (-1);
 				forbidden.(reduc).(steps) <- (!to_forbid);
+				Printf.printf "--> Done computing factors from which we remove %d letters in %d steps%!\n" reduc steps;
 				forbidden.(reduc).(steps)
 			end
 			
 			(* Recursive call *)
 			else (* expected that steps is at least 3 here, not steps = 1 *)
 			begin
-				let forbid_previous = Array.make ceil_min_period Nil in
-				for i = 1 to (ceil_min_period - 1) do
-					forbid_previous.(i) <- build_forbidden (reduc - i) (steps - 1) (* still have to remove reduc -i letters after finding a square of size  *)
-				done;
 				let to_forbid = ref (build_forbidden (reduc - floor_min_period) (steps-1)) in
-				(*Careful : floor here because we're not sure it is enough to remove "only" reduc-ceil letters*)
+				if (reduc+1 < Array.length forbidden) && forbidden.(reduc+1).(steps) != Nil then
+					to_forbid := union (!to_forbid) forbidden.(reduc+1).(steps);
+				(*Careful : floor here because we're not sure it is enough to remove "only" reduc-ceil letters, 
+				this can make us miss some factors in rational case :/*)
 				
 				(*This way forbidden_factors will contain every factor nicely reducible in any number of steps except just 1 step : separately*)
 				let word = Array.make max_size (-1) in
@@ -365,13 +454,12 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 						let new_pos = pos+1 in
 						word.(new_pos) <- bit;
 						if not(is_suffix_in_mirrors_tree word new_pos (!to_forbid)) (*don't even bother to look at word if it already has a factor in to_forbid*)
-						&& (still_has_no_big_square word new_pos ceil_min_period) then (*don't build a big square, 
+						&& (still_has_no_big_square word new_pos reduc) then (*don't build a big square, 
 						otherwise you're already forbidden by separate case : one step of reduction not in the tree*)
 						begin
-							if is_forbidden word new_pos forbid_previous (ceil_min_period-1) reduc then
+							if is_forbidden word new_pos reduc steps then
 							begin
 								to_forbid := tree_add (!to_forbid) word new_pos true;
-								(*no need to continue backtracking here, it would have an already forbidden factor as prefix *)
 								to_forbid := tree_add (!to_forbid) word new_pos false; (*if a factor is forbidden, then by same reductions so is its mirror.*)
 								to_forbid := tree_add (!to_forbid) (complement word) new_pos true; (*complement of word is also forbidden*)
 								to_forbid := tree_add (!to_forbid) (complement word) new_pos false; (*and its own reverse...*)
@@ -384,34 +472,70 @@ let wrong_factors max_step max_size alpha_inv = (*Generalise 1/3 to any alpha ra
 				in 
 				find_factors (-1);
 				forbidden.(reduc).(steps) <- (!to_forbid);
+				Printf.printf "--> Done computing factors from which we remove %d letters in %d steps%!\n" reduc steps;
 				forbidden.(reduc).(steps) (*returns asked result : a tree of forbidden factors, ie reducing r letters within s steps*)
 			end
 		end
-	in build_forbidden (rat_ceil (mult_by_int alpha max_step)) max_step
-;;
-
-
-
-let print_array a =
-	print_string "[|";
-	for i = 0 to Array.length a - 2 do
-		print_int a.(i); print_string ";"
+	
+	and is_forbidden word n reduc steps =
+		(** Checks that no reduction in "word" of a square of size 1 or 2 leads to a forbidden word,
+		ie a word containing a factor from corresponding tree of suffix forbid_1 or 2 (corresponding to description below) *)
+		let res = ref false in
+		let pos = ref 0 in
+		let max_period = reduc - 1 in
+		while not(!res) && (!pos) < n do (*look for small squares beginning at pos, no use to check last letter*)
+			let period = ref max_period in
+			while not(!res) && (!period) >= 1 do
+				let is_square = ref true in
+				if (!pos + 2*(!period)-1) > n then is_square := false;
+				let pos_square = ref 0 in
+				while !is_square && pos_square < period do (* check we have a square of size period at pos "pos" *)
+					if word.(!pos + (!pos_square)) != word.(!pos + (!period) + (!pos_square)) then
+						is_square := false;
+					pos_square := !pos_square + 1;
+				done;
+				if (!is_square) then begin
+					let reduc_word = Array.append (Array.sub word 0 (!pos)) (Array.sub word (!pos+(!period)) (n-(!pos+(!period))+1)) in
+					let forbid_previous = build_forbidden (reduc - (!period)) (steps-1) in
+					if (has_factor_in_tree reduc_word ((Array.length reduc_word) - 1) forbid_previous)(*period is the number of letter we removed*)
+					|| not(has_no_big_square reduc_word ((Array.length reduc_word)-1) (reduc - (!period))) then (*case forbidden in one step done separately*)
+						res := true;
+				end;
+				period := !period - 1;
+			done;
+			pos := (!pos + 1)
+		done;
+		!res
+	
+	in 
+	let res = ref Nil in
+	for nb_steps = 2 to max_step do
+		let tight_tree = build_forbidden (rat_ceil (mult_by_int alpha nb_steps)) nb_steps in
+		res := union (!res) tight_tree;
+		Printf.printf "Added factors forbidden in %d steps\n%!" nb_steps;
 	done;
-	if Array.length a > 0 then print_int a.(Array.length a -1);
-	print_string "|]\n"
+	print_empty (forbidden);
+	(!res)
 ;;
+
+
+
 
 exception Found of int*int;;
-let rec reduce_ratio word n alpha nb_letters_removed nb_steps_done =  (*warning alpha is alpha_inv*)
+let rec reduce_ratio word n alpha_inv nb_letters_removed nb_steps_done =  
 	(*Printf.printf "Checking number of steps giving max ratio for (%d,%d)\non word :" nb_letters_removed nb_steps_done;
 	print_array word;*)
+	let alpha = rat_inv alpha_inv in
 	let res_nb_letters = ref nb_letters_removed in
 	let res_nb_steps = ref (max nb_steps_done 1) in
 	let max_period = rat_ceil (rat_minus (mult_by_int alpha (nb_steps_done + 1)) (nb_letters_removed, 1)) in
 	(*Printf.printf "max period is %d\n" max_period;*)
 	(*max_period is period to check in reduction, if we have a square bigger than that it's ok !*)
 	if not(has_no_big_square word n max_period) then
+	begin
+		Printf.printf "\n We had removed %d letters in %d steps and found a square of size %d in the word : \n" nb_letters_removed nb_steps_done max_period;
 		raise (Found (nb_letters_removed + max_period, nb_steps_done + 1)); (*this does makes i letters removed in j steps such that i/j >= alpha.*)
+	end;
 	let pos = ref 0 in
 	while (!pos) < n do (*look for small squares beginning at pos, no use to check last letter*)
 		let period = ref 1 in
@@ -432,7 +556,7 @@ let rec reduce_ratio word n alpha nb_letters_removed nb_steps_done =  (*warning 
 				end;
 				let reduc_word = Array.append (Array.sub word 0 (!pos)) (Array.sub word (!pos+(!period)) (n-(!pos+(!period))+1)) in
 				let (nb_letters, nb_steps) = reduce_ratio reduc_word ((Array.length reduc_word) - 1) 
-					alpha (nb_letters_removed + (!period)) (nb_steps_done + 1) in
+					alpha_inv (nb_letters_removed + (!period)) (nb_steps_done + 1) in
 				if ge (nb_letters+(!period), nb_steps + 1) alpha then raise (Found (nb_letters + (!period), nb_steps + 1)); (*we have a chain such that i/j >= alpha. Not supposed to get there, 
 				Found should be raise earlier when stumbling upon a big square at some point (last step).*)
 				if gt (nb_letters+(!period), nb_steps+1) (!res_nb_letters, !res_nb_steps) then begin

@@ -155,7 +155,7 @@ Printf.printf "Empty array means there are no word of required size dodging all 
 (*
 let alpha = (int_of_string Sys.argv.(1), int_of_string Sys.argv.(2)) in
 let nb_reduc = 7 in
-let max_sizes = [|0;0;int_of_string Sys.argv.(3);int_of_string Sys.argv.(4);int_of_string Sys.argv.(5);int_of_string Sys.argv.(6);int_of_string Sys.argv.(7); int_of_string Sys.argv.(8)|] in (*26;18;18 enough for 2/5*)
+let max_sizes = [|0;int_of_string Sys.argv.(3);int_of_string Sys.argv.(4);int_of_string Sys.argv.(5);int_of_string Sys.argv.(6);int_of_string Sys.argv.(7);int_of_string Sys.argv.(8); int_of_string Sys.argv.(9)|] in (*26;18;18 enough for 2/5*)
 Printf.printf "Creating forbidden factors of variable size for at most %d reduction steps.\n" nb_reduc;
 let forbid = wrong_factors nb_reduc max_sizes alpha in
 Printf.printf "We forbid %d factors with this method.\n" (nb_of_factors_in_tree forbid);
